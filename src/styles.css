@@ -1,0 +1,1043 @@
+:root {
+  /* About a fifth of the screen: each engine is a dial with its switch below */
+  --dash-h: clamp(150px, 20dvh, 230px);
+  --ink: #ebe6d8;
+  --banana: #ffd84d;
+  --ink-dark: #2a2416;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #22272d;
+  color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.app {
+  display: grid;
+  /* minmax(0, …): the canvas sizes itself to this column, so without it the
+     column can never get narrower than the canvas already is, and shrinking
+     the window leaves the scene (and the cards laid out on it) off to the right */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr var(--dash-h);
+  height: 100dvh;
+}
+
+.sky {
+  position: relative;
+  min-height: 0;
+  background: #f4cba6;
+}
+
+/* ---------- Dashboard ---------- */
+
+.dash {
+  --h: var(--dash-h);
+  --col: min(calc(var(--h) * 0.74), 28vw);
+  --gap: clamp(14px, 4vw, 56px);
+  --row-w: calc(3 * var(--col) + 2 * var(--gap));
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding-bottom: env(safe-area-inset-bottom);
+  /* The worn cockpit paint from the Blender kit, tiled */
+  background: #8f9499 url('/textures/panel/panel_basecolor.webp') 0 0 / 360px repeat;
+  border-top: 6px solid #2c2c2a;
+  user-select: none;
+}
+
+/* Equal-width columns, so GO always sits dead centre */
+.dash-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--col);
+  column-gap: var(--gap);
+  align-items: start;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--h) * 0.035);
+}
+
+/* ----- Switches: a lit rocker in a black bezel ----- */
+/* Plain-CSS port of the user's Sass rocker switch. Every size comes from
+   --sw (the switch width), so it scales with the strip. Colour comes from --c:
+   unlit red when off, lit banana yellow when on, unlit grey while GO is locked. */
+
+.rocker {
+  /* The bezel adds a border of 0.133 × width all round: total height ≈ 0.75 × the strip,
+     leaving room for the label underneath */
+  --sw: calc(var(--h) * 0.48);
+  --pivot: calc(var(--sw) * 0.133);
+  --c: #ff1818;
+  --c-25: color-mix(in srgb, var(--c), black 45%);
+  --c-33: color-mix(in srgb, var(--c), black 58%);
+  --c-35: color-mix(in srgb, var(--c), black 62%);
+  --c-45: color-mix(in srgb, var(--c), black 78%);
+  --c-20: color-mix(in srgb, var(--c), black 36%);
+  --c-glow: color-mix(in srgb, var(--c), white 45%);
+  position: relative;
+  display: block;
+  width: var(--sw);
+  height: calc(var(--sw) * 1.3);
+  padding: calc(var(--sw) * 0.133);
+  border: 0;
+  border-radius: 5px;
+  background-color: black;
+  box-shadow:
+    0 0 10px 2px rgba(0, 0, 0, 0.2),
+    0 0 1px 2px black,
+    inset 0 2px 2px -2px white,
+    inset 0 0 2px calc(var(--sw) * 0.1) #47434c,
+    inset 0 0 2px calc(var(--sw) * 0.147) black;
+  perspective: 700px;
+  box-sizing: content-box;
+  font: inherit;
+}
+.col[data-state='on'] .rocker {
+  --c: #ffd84d;
+}
+.col[data-state='locked'] .rocker {
+  --c: #8f8f8f;
+}
+
+.rocker-key {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(var(--c-25) 0%, var(--c-33) 30%, var(--c-33) 70%, var(--c-25) 100%) no-repeat;
+  transform-origin: center center calc(-1 * var(--pivot));
+  transform: translateZ(var(--pivot)) rotateX(-25deg);
+  transform-style: preserve-3d;
+  transition: all 0.3s cubic-bezier(1, 0, 1, 1);
+}
+/* The key's top and bottom sides, seen as it rocks */
+.rocker-key::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: calc(var(--sw) * 0.333);
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.8) 10%, rgba(255, 255, 255, 0.3) 30%, var(--c-35) 75%, var(--c-45)) 50% 50% / 97% 97% no-repeat,
+    var(--c-20);
+  transform-origin: top;
+  transform: rotateX(-90deg);
+}
+.rocker-key::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: calc(var(--sw) * 0.333);
+  background-image: linear-gradient(var(--c-35), var(--c-45));
+  transform-origin: top;
+  transform: translateY(calc(var(--sw) * 0.333)) rotateX(-90deg);
+  box-shadow: 0 calc(var(--sw) * 0.333) 8px 0 black, 0 calc(var(--sw) * 0.533) 20px 0 rgba(0, 0, 0, 0.5);
+}
+.rocker-key > i {
+  position: absolute;
+  inset: 0;
+}
+.rocker .light {
+  opacity: 0;
+  animation: rocker-light-off 1s;
+  background-image: radial-gradient(var(--c-glow), var(--c) 40%, transparent 70%);
+}
+.rocker .dots {
+  background-image: radial-gradient(transparent 30%, color-mix(in srgb, var(--c-35) 70%, transparent) 70%);
+  background-size: 10px 10px;
+}
+/* The power symbol, drawn with gradients */
+.rocker .characters {
+  background:
+    linear-gradient(white, white) 50% 20% / 5% 20% no-repeat,
+    radial-gradient(circle, transparent 50%, white 52%, white 70%, transparent 72%) 50% 80% / 33% 25% no-repeat;
+}
+.rocker .shine {
+  opacity: 0.3;
+  background:
+    linear-gradient(white, transparent 3%) 50% 50% / 97% 97% no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.5), transparent 50%, transparent 80%, rgba(255, 255, 255, 0.5)) 50% 50% / 97% 97% no-repeat;
+  transition: all 0.3s cubic-bezier(1, 0, 1, 1);
+}
+.rocker .shadow {
+  opacity: 1;
+  background: linear-gradient(transparent 70%, rgba(0, 0, 0, 0.8)) no-repeat;
+  transition: all 0.3s cubic-bezier(1, 0, 1, 1);
+}
+
+/* On: rocked up and lit */
+.col[data-state='on'] .rocker-key {
+  transform: translateZ(var(--pivot)) rotateX(25deg);
+  box-shadow: 0 -10px 20px var(--c);
+}
+.col[data-state='on'] .rocker .light {
+  animation: rocker-flicker 0.2s infinite 0.3s;
+}
+.col[data-state='on'] .rocker .shine {
+  opacity: 1;
+}
+.col[data-state='on'] .rocker .shadow {
+  opacity: 0;
+}
+
+.rocker-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+}
+.rocker-hit:not(:disabled) {
+  cursor: pointer;
+}
+.rocker-hit:focus-visible {
+  outline: 3px solid var(--banana);
+  outline-offset: 6px;
+}
+
+.rocker-label {
+  color: #2c2c2a;
+  font-size: clamp(11px, calc(var(--h) * 0.07), 14px);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+.col[data-state='locked'] .rocker-label {
+  color: #5f5e5a;
+}
+
+@keyframes rocker-flicker {
+  0% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes rocker-light-off {
+  0% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .col[data-state='on'] .rocker .light {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ----- Scene 3: the lever ----- */
+/* Fades in to the left of the switches, which stay exactly where they are.
+   Seen head on: a ball knob on a short chrome shaft, riding up a gated slot
+   in a recessed plate. The lever pivots behind the plate, so it leans toward
+   you as it travels: the knob sits below where the shaft comes out of the
+   slot at the bottom of its travel, over it in the middle (pointing straight
+   at you, a touch bigger), and above it at the top. --t is its position, 0 → 1,
+   set every frame by <Throttle>. The knob is the switches' plastic: unlit red
+   at idle, warming to lit banana yellow as it goes up. */
+.throttle {
+  --t: 0;
+  --plate-w: calc(var(--h) * 0.46);
+  --plate-h: calc(var(--h) * 0.84);
+  --slot-top: 0.2;
+  --slot-len: calc(var(--plate-h) * 0.5);
+  --lean: calc((var(--t) - 0.5) * 2); /* -1 bottom of travel → 1 top */
+  --knob: calc(var(--h) * 0.3 * (1 - 0.1 * max(var(--lean), -1 * var(--lean))));
+  --reach: calc(var(--lean) * var(--h) * 0.08); /* knob's height above where the shaft leaves the slot */
+  --c: color-mix(in srgb, #ffd84d calc(var(--t) * 100%), #ff1818);
+  --c-25: color-mix(in srgb, var(--c), black 45%);
+  --c-33: color-mix(in srgb, var(--c), black 58%);
+  --c-45: color-mix(in srgb, var(--c), black 78%);
+  --c-glow: color-mix(in srgb, var(--c), white 50%);
+  position: absolute;
+  top: 50%;
+  right: calc(50% + var(--row-w) / 2 + clamp(20px, 3vw, 48px));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transform: translateY(-50%);
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.6s, visibility 0.6s;
+}
+.dash[data-mode='throttle'] .throttle {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.throttle[data-held] {
+  cursor: grabbing;
+}
+.throttle[data-state='boost'],
+.throttle[data-state='failed'] {
+  --t: 1;
+  cursor: default;
+}
+.throttle[data-state='failed'] {
+  --c: #ff1818;
+}
+.throttle:focus-visible .lever {
+  outline: 3px solid var(--banana);
+  outline-offset: 6px;
+}
+
+/* The plate: the switches' black bezel around a dark recessed face */
+.lever {
+  position: relative;
+  width: var(--plate-w);
+  height: var(--plate-h);
+  border-radius: 6px;
+  background: linear-gradient(#232326, #161618);
+  box-shadow:
+    0 0 10px 2px rgba(0, 0, 0, 0.2),
+    0 0 1px 2px black,
+    inset 0 2px 2px -2px white,
+    inset 0 0 2px calc(var(--plate-w) * 0.06) #47434c,
+    inset 0 0 2px calc(var(--plate-w) * 0.09) black;
+}
+/* Engraved: dark cut, lit lip under it */
+.lever-mark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  color: #77767a;
+  font-size: clamp(8px, calc(var(--h) * 0.05), 11px);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.08), 0 -1px 0 black;
+}
+.lever-mark {
+  top: calc(var(--plate-h) * 0.07);
+}
+/* Notches either side of the gate at 0, 25, 50, 75 and 100% */
+.lever-notches {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--plate-h) * var(--slot-top) - 1px);
+  width: calc(var(--plate-w) * 0.5);
+  height: calc(var(--slot-len) + 2px);
+  transform: translateX(-50%);
+  background:
+    repeating-linear-gradient(#6a6a6e 0 2px, transparent 2px calc((100% - 2px) / 4)) left / 28% 100% no-repeat,
+    repeating-linear-gradient(#6a6a6e 0 2px, transparent 2px calc((100% - 2px) / 4)) right / 28% 100% no-repeat;
+}
+.lever-slot {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--plate-h) * var(--slot-top));
+  width: calc(var(--h) * 0.075);
+  height: var(--slot-len);
+  overflow: hidden;
+  border-radius: 999px;
+  background: #050505;
+  box-shadow: inset 0 3px 4px black, 0 1px 0 rgba(255, 255, 255, 0.07);
+  transform: translateX(-50%);
+}
+/* Light below the lever, filling the gate as it rises */
+.lever-fill {
+  position: absolute;
+  inset: auto 22% 0;
+  height: calc(var(--t) * 100%);
+  border-radius: 999px;
+  background: linear-gradient(to top, var(--c-33), var(--c));
+  opacity: 0.85;
+}
+
+/* The moving parts hang off the point where the shaft leaves the slot */
+.lever-arm {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--plate-h) * (1 - var(--slot-top)) - var(--slot-len) + var(--slot-len) * var(--t));
+  width: 0;
+  height: 0;
+}
+.lever-boot {
+  position: absolute;
+  left: calc(var(--h) * -0.07);
+  top: calc(var(--h) * -0.03);
+  width: calc(var(--h) * 0.14);
+  height: calc(var(--h) * 0.06);
+  border-radius: 50%;
+  background: radial-gradient(#2c2c2e, #0a0a0b 70%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+/* Seen end on, the shaft shows only as long as the lever leans */
+.lever-shaft {
+  position: absolute;
+  left: calc(var(--h) * -0.028);
+  bottom: min(0px, var(--reach));
+  width: calc(var(--h) * 0.056);
+  height: max(var(--reach), -1 * var(--reach));
+  border-radius: 3px;
+  background: linear-gradient(90deg, #2e2e30, #d9d9dc 38%, #9a9a9e 62%, #2a2a2c);
+}
+.lever-knob {
+  position: absolute;
+  left: calc(var(--knob) / -2);
+  bottom: calc(var(--reach) - var(--knob) / 2);
+  width: var(--knob);
+  height: var(--knob);
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, var(--c-glow) 0, var(--c) 24%, var(--c-25) 64%, var(--c-45) 100%);
+  /* Its shadow falls down and right on the plate, farther the more it leans out */
+  box-shadow:
+    calc(var(--knob) * 0.06) calc(var(--knob) * (0.14 + 0.06 * var(--lean))) calc(var(--knob) * 0.16) rgba(0, 0, 0, 0.7),
+    inset 0 calc(var(--knob) * -0.07) calc(var(--knob) * 0.1) rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s;
+}
+/* Specular highlight */
+.lever-knob::after {
+  content: '';
+  position: absolute;
+  left: 22%;
+  top: 14%;
+  width: 30%;
+  height: 22%;
+  border-radius: 50%;
+  background: radial-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 70%);
+}
+/* Grabbed: pressed in a touch */
+.throttle[data-held] .lever-knob {
+  transform: scale(0.95);
+}
+.throttle[data-state='boost'] .lever-fill {
+  animation: rocker-flicker 0.2s infinite 0.3s;
+}
+/* The engines die: the light in the gate sputters and goes out */
+.throttle[data-state='failed'] .lever-fill {
+  opacity: 0;
+  animation: throttle-sputter 1.4s;
+}
+@keyframes throttle-sputter {
+  0%, 18%, 34%, 52% {
+    opacity: 0.85;
+  }
+  10%, 26%, 44%, 100% {
+    opacity: 0;
+  }
+}
+
+.throttle-readout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 4ch;
+  color: #2c2c2a;
+}
+.throttle-pct {
+  font-size: clamp(20px, calc(var(--h) * 0.18), 38px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.throttle-label {
+  font-size: clamp(10px, calc(var(--h) * 0.06), 13px);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+/* Narrow screens have no room beside the switches: the lever stands just
+   above the panel on the left instead, with its hint above it. Once it's
+   done its job it fades away, leaving the sky to the Constellar card */
+@media (max-width: 760px) {
+  .throttle {
+    top: auto;
+    right: auto;
+    bottom: calc(100% + 14px);
+    left: 16px;
+    transform: none;
+  }
+  .dash[data-mode='throttle'] .throttle:not([data-state='idle']) {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition-delay: 1.2s;
+  }
+  .go-hint.throttle-hint {
+    left: 16px;
+    bottom: calc(100% + 28px + var(--h) * 0.84);
+    transform: translateY(6px);
+  }
+  .go-hint.throttle-hint.is-shown {
+    transform: none;
+  }
+}
+
+/* ----- Scene 3: the big red button ----- */
+/* Mirrors the lever, on the right of the switches. A domed red cap in a
+   hole in a black bezel. Out, it stands proud: you see its side wall (the
+   dark band under the dome). Pressed (data-pos="in"), it travels into the
+   hole: a little smaller as it moves away, the wall gone, the dark of the
+   hole showing round it. Going in is quick and accelerating; coming back is
+   a spring, overshooting a touch. */
+.red {
+  --cap: calc(var(--h) * 0.46);
+  --rise: calc(var(--cap) * 0.12); /* how far the cap stands out of the bezel */
+  --c: #ff1818;
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--row-w) / 2 + clamp(20px, 3vw, 48px));
+  transform: translateY(-50%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.6s, visibility 0.6s;
+}
+.red.is-shown {
+  opacity: 1;
+  visibility: visible;
+}
+.red-bezel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: calc(var(--cap) * 1.42);
+  height: calc(var(--cap) * 1.42);
+  border-radius: 50%;
+  /* The hole (just wider than the cap), a lit metal lip, then the black bezel */
+  background: radial-gradient(circle closest-side, #030303 0 73%, #424246 75%, #1c1c1e 84%, #0a0a0b 100%);
+  box-shadow:
+    0 0 10px 2px rgba(0, 0, 0, 0.25),
+    0 0 1px 2px black,
+    inset 0 2px 2px -1px rgba(255, 255, 255, 0.35),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.8);
+}
+/* The lip's shadow, falling on the cap's edge (deeper once the cap's in) */
+.red-bezel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, transparent 0 63%, rgba(0, 0, 0, 0.6) 72.5%, transparent 74%);
+  pointer-events: none;
+}
+.red-cap {
+  position: relative;
+  width: var(--cap);
+  height: var(--cap);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, #ff8a7a 0, var(--c) 26%, #b80000 62%, #5c0000 100%);
+  /* Side wall, then its shadow in the hole */
+  box-shadow:
+    0 var(--rise) 0 #6e0000,
+    0 calc(var(--rise) + 2px) 0 #2a0000,
+    0 calc(var(--rise) + 5px) 9px rgba(0, 0, 0, 0.7),
+    inset 0 calc(var(--cap) * -0.08) calc(var(--cap) * 0.12) rgba(0, 0, 0, 0.35);
+  transform: translateY(calc(var(--rise) * -0.5));
+  /* Coming back out: a spring */
+  transition:
+    transform 0.3s cubic-bezier(0.25, 1.8, 0.45, 1),
+    box-shadow 0.3s cubic-bezier(0.25, 1.8, 0.45, 1),
+    filter 0.2s;
+  cursor: pointer;
+  touch-action: none;
+}
+/* Specular highlight */
+.red-cap::after {
+  content: '';
+  position: absolute;
+  left: 20%;
+  top: 12%;
+  width: 34%;
+  height: 22%;
+  border-radius: 50%;
+  background: radial-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 70%);
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.red-cap:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.red-cap:focus-visible {
+  outline: 3px solid var(--banana);
+  outline-offset: calc(var(--cap) * 0.22);
+}
+.red[data-pos='in'] .red-cap {
+  transform: translateY(calc(var(--rise) * 0.15)) scale(0.88);
+  box-shadow:
+    0 0 0 #6e0000,
+    0 1px 0 #2a0000,
+    0 1px 2px rgba(0, 0, 0, 0.8),
+    inset 0 calc(var(--cap) * -0.08) calc(var(--cap) * 0.12) rgba(0, 0, 0, 0.45);
+  filter: brightness(0.86);
+  /* Going in: quick, speeding up until it bottoms out */
+  transition-duration: 0.07s;
+  transition-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
+}
+.red[data-pos='in'] .red-cap::after {
+  opacity: 0.6;
+}
+.red[data-state='pressed'] .red-cap {
+  cursor: default;
+}
+
+/* Narrow screens: on the dashboard too. <RedButton> shrinks the switches
+   and slides them left to make room, and places the button beside them */
+@media (max-width: 760px) {
+  .red {
+    --cap: calc(var(--h) * 0.4);
+    transition-delay: 0.3s;
+  }
+}
+.dash-row {
+  transform: translateX(var(--row-shift, 0px)) scale(var(--row-scale, 1));
+  transition: transform 0.6s cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+/* Plain hint above the panel once GO unlocks */
+.go-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 14px);
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(42, 36, 22, 0.82);
+  color: #fbf8f1;
+  font-size: 13px;
+  white-space: nowrap;
+  transform: translate(-50%, 6px);
+  opacity: 0;
+  transition: opacity 0.4s, transform 0.4s;
+  pointer-events: none;
+}
+.go-hint.is-shown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.sound {
+  position: absolute;
+  right: 14px;
+  bottom: calc(100% + 14px);
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(42, 36, 22, 0.6);
+  color: #fbf8f1;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sound:hover {
+  background: rgba(42, 36, 22, 0.8);
+}
+.sound:focus-visible {
+  outline: 2px solid var(--banana);
+  outline-offset: 2px;
+}
+
+/* ---------- Scene 2: portfolio cards ---------- */
+
+/* <ShowcaseAnchor> sizes and places each card and draws its outline every
+   frame; the inner side is cut parallel to the wing. Flat, outlined and
+   solid like the dashboard keys: ink lines, a hard shadow, no blur. */
+.showcase {
+  --ink-line: #2a2416;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s, visibility 0.45s;
+}
+.showcase.is-shown .card {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-duration: 0.9s;
+}
+.showcase.is-shown .card.is-right {
+  transition-delay: 0.18s;
+}
+
+.card-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.card-fill {
+  fill: #fffcf3;
+  stroke: var(--ink-line);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.card-shadow {
+  fill: var(--ink-line);
+  stroke: var(--ink-line);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  transform: translate(0, 7px);
+}
+
+.card-body {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px 16px;
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex: none;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--ink-line);
+}
+.card-head h2 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+  color: var(--ink-line);
+  font-size: clamp(16px, 2.3dvh, 21px);
+  font-weight: 800;
+  line-height: 1.15;
+}
+.card-index {
+  flex: none;
+  color: #8a5f00;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+/* On short screens the image gives up height first, so the text always shows */
+.card-image {
+  display: block;
+  flex: 0 1 auto;
+  min-height: 40px;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  object-fit: cover;
+  border: 2px solid var(--ink-line);
+  border-radius: 6px;
+  background: #e9e3d3;
+}
+/* PLACEHOLDER: stands in until real images go in src/content/portfolio.js */
+.card-image.is-placeholder {
+  display: grid;
+  place-items: center;
+  background: repeating-linear-gradient(135deg, #efe9da 0 9px, #e4ddca 9px 18px);
+}
+.card-image.is-placeholder span {
+  padding: 3px 8px;
+  border: 2px solid var(--ink-line);
+  border-radius: 4px;
+  background: #fffcf3;
+  color: var(--ink-line);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.card-text {
+  flex: 0 1 auto;
+  min-height: 3.6em;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 2px solid var(--ink-line);
+  border-radius: 6px;
+  background: #f5efe0;
+}
+.card-text p {
+  margin: 0;
+  color: #3d3626;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.card-link {
+  align-self: flex-start;
+  flex: none;
+  padding: 8px 16px;
+  border: 2px solid var(--ink-line);
+  border-radius: 8px;
+  background: var(--banana);
+  box-shadow: 0 4px 0 var(--ink-line);
+  color: var(--ink-line);
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 0.1s, box-shadow 0.1s, background-color 0.15s;
+}
+.card-link:hover {
+  background: #ffe680;
+}
+.card-link:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink-line);
+}
+.card-link:focus-visible {
+  outline: 3px solid var(--ink-line);
+  outline-offset: 4px;
+}
+
+@media (max-width: 600px), (max-height: 560px) {
+  .card-body {
+    gap: 7px;
+    padding: 8px 10px 12px;
+  }
+  .card-head {
+    gap: 6px;
+    padding-bottom: 5px;
+  }
+  .card-head h2 {
+    font-size: 14px;
+  }
+  .card-index {
+    font-size: 11px;
+  }
+  .card-text {
+    padding: 5px 7px;
+  }
+  .card-text p {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .card-link {
+    align-self: stretch;
+    padding: 5px 8px;
+    font-size: 12px;
+    text-align: center;
+  }
+}
+
+/* ---------- Scene 3: Constellar ---------- */
+
+/* The face of the card <GameCard3D> stands in space beside the plane (its
+   thickness is a 3D slab behind this). Same build as the scene 2 cards:
+   cream with an ink outline. The art is pixel art, so it's scaled without
+   smoothing. */
+.game {
+  --ink-line: #2a2416;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border: 3px solid var(--ink-line);
+  background: #fffcf3;
+  color: var(--ink-line);
+  font-family: var(--sans);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.9s, visibility 0.9s;
+  user-select: none;
+}
+.game.is-shown {
+  opacity: 1;
+  visibility: visible;
+}
+/* Sunlight: the sun's off to the left in space, so the face is a touch
+   brighter and warmer there and falls into cool shade toward the right */
+.game::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, rgba(255, 240, 214, 0.16) 0%, transparent 38%, rgba(34, 28, 70, 0.2) 100%);
+  pointer-events: none;
+}
+.game-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: 748 / 896;
+  /* Never cropped: any spare room is filled with the art's own night sky */
+  object-fit: contain;
+  object-position: top;
+  border: 2px solid var(--ink-line);
+  border-radius: 6px;
+  background: #020317;
+  image-rendering: pixelated;
+}
+.game-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.game-kicker {
+  margin: 0;
+  color: #8a5f00;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.game-buy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+}
+.game-price {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.game-price strong {
+  font-size: 22px;
+  font-weight: 800;
+}
+.game-was {
+  color: #6f6754;
+  font-size: 14px;
+}
+.game-discount {
+  padding: 2px 7px;
+  border: 2px solid var(--ink-line);
+  border-radius: 5px;
+  background: var(--banana);
+  font-size: 13px;
+  font-weight: 800;
+}
+.game .card-link {
+  align-self: auto;
+}
+
+/* Portrait: the art cropped to a banner of the logo on top, the text full width under it */
+.game.is-portrait {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+}
+.game.is-portrait .game-art {
+  height: auto;
+  aspect-ratio: 748 / 300;
+  object-fit: cover; /* the banner is the logo, cropped on purpose */
+}
+.game.is-portrait .game-body {
+  gap: 7px;
+}
+.game.is-portrait .game-kicker {
+  font-size: 10px;
+}
+.game.is-portrait .card-text p {
+  font-size: 12px;
+  line-height: 1.35;
+}
+.game.is-portrait .game-price strong {
+  font-size: 18px;
+}
+
+/* ---------- Scene 3: the enemy ---------- */
+
+/* Pixel art over the 3D world; <Enemy> sizes and moves it every frame */
+.enemy {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 30;
+  image-rendering: pixelated;
+  pointer-events: none;
+  visibility: hidden;
+}
+.enemy.is-shown {
+  visibility: visible;
+}
+
+/* ---------- End of scene ---------- */
+
+.scene-end {
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 18px;
+  border-radius: 999px;
+  background: rgba(42, 36, 22, 0.86);
+  color: #fbf8f1;
+  font-size: 14px;
+  transform: translate(-50%, -12px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.5s, transform 0.5s, visibility 0.5s;
+}
+.scene-end.is-shown {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.scene-end p {
+  margin: 0;
+  white-space: nowrap;
+}
+.scene-end button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--banana);
+  color: var(--ink-dark);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  #root *,
+  #root *::before,
+  #root *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}

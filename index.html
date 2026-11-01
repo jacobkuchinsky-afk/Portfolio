@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#23282f" />
+    <title>Jacob Kuchinsky — Portfolio</title>
+    <link rel="preload" as="image" href="/banana-peel.webp" type="image/webp" />
+    <!-- Start scene 1's files downloading now, alongside the app's JavaScript,
+         instead of waiting for it to run. src/boot/assets.js picks these up. -->
+    <link rel="preload" href="/models/trijet.glb" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/textures/asphalt/asphalt_diff.webp" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/textures/asphalt/asphalt_normal.webp" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/textures/asphalt/asphalt_arm.webp" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/draco/draco_decoder.wasm" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/draco/draco_wasm_wrapper.js" as="fetch" crossorigin="anonymous" />
+    <!-- The boarding pass doubles as the loading screen. Its styles live here,
+         not in the JS bundle, so it paints immediately on a cold load. -->
+    <style>
+      :root {
+        --banana: #ffd84d;
+        --banana-hi: #ffe680;
+        --banana-deep: #e8a800;
+        --banana-ink: #8a5f00;
+        --ink-dark: #2a2416;
+        --muted: #8a8270;
+        --paper: #fffcf3;
+        --stub-w: 236px;
+        --notch: 15px;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        /* A rough dusk sky and meadow, blurred behind the ticket until the 3D scene draws */
+        background: linear-gradient(180deg, #8ea2d4 0%, #d9b7c0 38%, #f4c48f 58%, #3f5a26 58.2%, #2f4520 84%, #22272d 84%);
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .preflight {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        padding: 20px 16px;
+        box-sizing: border-box;
+        overflow-y: auto; /* short phones: scroll instead of clipping the ticket */
+        background: radial-gradient(ellipse at 50% 45%, rgba(28, 24, 18, 0.2), rgba(28, 24, 18, 0.55));
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        transition: opacity 0.7s ease, visibility 0.7s;
+      }
+      .preflight.is-gone {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      /* ---------- Ticket ---------- */
+
+      .ticket-wrap {
+        margin: auto;
+        width: min(820px, 100%);
+        animation: ticket-in 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      /* Shadows live on this wrapper as filters, because the ticket's notches
+         are cut with a mask, which would clip an ordinary box-shadow. */
+      .ticket-tilt {
+        transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+        transition: transform 0.35s ease-out;
+        filter: drop-shadow(0 2px 2px rgba(20, 14, 4, 0.18)) drop-shadow(0 14px 18px rgba(20, 14, 4, 0.22)) drop-shadow(0 40px 50px rgba(20, 14, 4, 0.28));
+      }
+      .ticket {
+        position: relative;
+        display: flex;
+        border-radius: 16px;
+        color: var(--ink-dark);
+        background-color: var(--paper);
+        /* Paper grain plus a soft sheen */
+        background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 40%, rgba(120, 90, 30, 0.05)),
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .27 0 0 0 0 .12 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        /* Half-circle notches where the stub tears off */
+        --cut: calc(100% - var(--stub-w));
+        -webkit-mask: radial-gradient(circle at var(--cut) 0, transparent var(--notch), #000 calc(var(--notch) + 0.5px)) top / 100% 51% no-repeat,
+          radial-gradient(circle at var(--cut) 100%, transparent var(--notch), #000 calc(var(--notch) + 0.5px)) bottom / 100% 51% no-repeat;
+        mask: radial-gradient(circle at var(--cut) 0, transparent var(--notch), #000 calc(var(--notch) + 0.5px)) top / 100% 51% no-repeat,
+          radial-gradient(circle at var(--cut) 100%, transparent var(--notch), #000 calc(var(--notch) + 0.5px)) bottom / 100% 51% no-repeat;
+      }
+      /* Light glare that follows the pointer */
+      .ticket::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: radial-gradient(circle at var(--gx, 20%) var(--gy, 0%), rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 45%);
+        mix-blend-mode: soft-light;
+        pointer-events: none;
+      }
+
+      .band {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        height: 54px;
+        padding: 0 24px;
+        background: linear-gradient(180deg, var(--banana-hi), var(--banana) 55%, #f7cb2e);
+        box-shadow: inset 0 -1px 0 rgba(138, 95, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      }
+      .band h1,
+      .band p {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .band h1 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .band small {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--banana-ink);
+      }
+      .band svg {
+        width: 22px;
+        height: 22px;
+        flex: none;
+      }
+
+      .main {
+        flex: 1;
+        min-width: 0;
+      }
+      .main-body {
+        padding: 18px 28px 16px;
+      }
+      .route {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: end;
+        gap: 18px;
+      }
+      .label {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--banana-ink);
+      }
+      .code {
+        display: block;
+        font-size: clamp(40px, 7vw, 58px);
+        font-weight: 850;
+        line-height: 0.95;
+        letter-spacing: 0.02em;
+        color: var(--ink-dark);
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+      }
+      .city {
+        display: block;
+        margin-top: 4px;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .route .to {
+        text-align: right;
+      }
+      .arc {
+        position: relative;
+        align-self: center;
+        height: 54px;
+        margin-bottom: 18px;
+      }
+      .arc svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .arc .plane {
+        position: absolute;
+        inset: auto;
+        left: 50%;
+        top: 2px;
+        width: 30px;
+        height: 30px;
+        margin-left: -15px;
+        color: var(--banana-deep);
+      }
+      .details {
+        display: grid;
+        grid-template-columns: repeat(5, auto);
+        justify-content: space-between;
+        gap: 10px 16px;
+        margin: 18px 0 0;
+        padding-top: 14px;
+        border-top: 1px solid rgba(42, 36, 22, 0.1);
+      }
+      .details dd,
+      .mini dd {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .note {
+        margin: 14px 0 0;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .stub {
+        display: flex;
+        flex-direction: column;
+        width: var(--stub-w);
+        flex: none;
+        background-color: rgba(120, 90, 30, 0.035);
+        /* Perforation */
+        background-image: radial-gradient(circle, rgba(42, 36, 22, 0.32) 1.2px, transparent 1.6px);
+        background-size: 4px 9px;
+        background-repeat: repeat-y;
+        background-position: -1px 0;
+      }
+      .stub .band {
+        justify-content: center;
+        padding: 0 16px;
+      }
+      .stub-body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+        gap: 10px;
+        padding: 14px 20px 16px;
+      }
+      .mini {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        width: 100%;
+        gap: 4px 12px;
+        margin: 0;
+      }
+      .mini .right {
+        text-align: right;
+      }
+      .action {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        flex: 1;
+        min-height: 128px;
+      }
+      .qr {
+        display: block;
+        flex: none;
+        width: 76px;
+        height: 76px;
+        fill: var(--ink-dark);
+      }
+
+      /* ---------- Banana peel loader: crouch, launch, flip, squash, wobble, settle ---------- */
+
+      .loader {
+        position: relative;
+        width: 84px;
+        height: 84px;
+      }
+      .peel-hop {
+        position: absolute;
+        left: 6px;
+        bottom: 8px;
+        width: 72px;
+        height: 62px;
+        transform-origin: 50% 100%;
+        animation: peel-hop 1.5s infinite;
+      }
+      .peel {
+        display: block;
+        width: 100%;
+        height: 100%;
+        transform-origin: 50% 60%;
+        animation: peel-flip 1.5s infinite;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      .peel-shadow {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 4px;
+        height: 7px;
+        border-radius: 50%;
+        background: rgba(42, 36, 22, 0.22);
+        animation: peel-shadow 1.5s infinite;
+      }
+      @keyframes peel-hop {
+        0% {
+          transform: translateY(0) scale(1, 1);
+          animation-timing-function: ease-in-out;
+        }
+        16% {
+          transform: translateY(0) scale(1.12, 0.84);
+          animation-timing-function: cubic-bezier(0.3, 0, 0.2, 1);
+        }
+        26% {
+          transform: translateY(-8px) scale(0.88, 1.14);
+          animation-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1);
+        }
+        54% {
+          transform: translateY(-24px) scale(1, 1);
+          animation-timing-function: cubic-bezier(0.6, 0, 0.85, 0.4);
+        }
+        80% {
+          transform: translateY(-4px) scale(0.92, 1.1);
+          animation-timing-function: linear;
+        }
+        86% {
+          transform: translateY(0) scale(1.2, 0.78);
+          animation-timing-function: ease-out;
+        }
+        93% {
+          transform: translateY(0) scale(0.95, 1.05);
+          animation-timing-function: ease-in-out;
+        }
+        100% {
+          transform: translateY(0) scale(1, 1);
+        }
+      }
+      @keyframes peel-flip {
+        0%,
+        24% {
+          transform: perspective(260px) rotateX(0deg) rotate(0deg);
+          animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+        }
+        80% {
+          transform: perspective(260px) rotateX(360deg) rotate(0deg);
+        }
+        87% {
+          transform: perspective(260px) rotateX(360deg) rotate(-6deg);
+        }
+        93% {
+          transform: perspective(260px) rotateX(360deg) rotate(4deg);
+        }
+        100% {
+          transform: perspective(260px) rotateX(360deg) rotate(0deg);
+        }
+      }
+      @keyframes peel-shadow {
+        0%,
+        100% {
+          transform: scaleX(1);
+          opacity: 1;
+        }
+        16% {
+          transform: scaleX(1.12);
+        }
+        54% {
+          transform: scaleX(0.5);
+          opacity: 0.35;
+        }
+        86% {
+          transform: scaleX(1.2);
+          opacity: 1;
+        }
+      }
+      @keyframes peel-bob {
+        50% {
+          transform: translateY(-4px);
+        }
+      }
+      @keyframes ticket-in {
+        from {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+      }
+
+      .progress {
+        width: 100%;
+        height: 5px;
+        border-radius: 3px;
+        background: rgba(42, 36, 22, 0.1);
+        box-shadow: inset 0 1px 1px rgba(42, 36, 22, 0.12);
+        overflow: hidden;
+      }
+      .progress i {
+        display: block;
+        height: 100%;
+        background: linear-gradient(180deg, var(--banana), var(--banana-deep));
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.25s ease-out;
+      }
+      .status {
+        margin: 0;
+        min-height: 1.3em;
+        font-size: 12px;
+        color: var(--muted);
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+      /* A raised button you can press down */
+      .begin {
+        width: 100%;
+        padding: 13px 14px;
+        border: 0;
+        border-radius: 10px;
+        background: linear-gradient(180deg, var(--banana-hi), var(--banana));
+        color: var(--ink-dark);
+        font: inherit;
+        font-weight: 750;
+        cursor: pointer;
+        box-shadow: 0 4px 0 #c9940a, 0 8px 14px rgba(120, 80, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .begin:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 5px 0 #c9940a, 0 10px 18px rgba(120, 80, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      }
+      .begin:active {
+        transform: translateY(3px);
+        box-shadow: 0 1px 0 #c9940a, 0 3px 6px rgba(120, 80, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      }
+      .begin:focus-visible {
+        outline: 2px solid var(--ink-dark);
+        outline-offset: 4px;
+      }
+      .sound-hint {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ---------- Phones: stack the stub under the ticket ---------- */
+      @media (max-width: 680px) {
+        :root {
+          --stub-h: 290px;
+        }
+        .ticket {
+          flex-direction: column;
+          --cut: calc(100% - var(--stub-h));
+          -webkit-mask: radial-gradient(circle at 0 var(--cut), transparent var(--notch), #000 calc(var(--notch) + 0.5px)) left / 51% 100% no-repeat,
+            radial-gradient(circle at 100% var(--cut), transparent var(--notch), #000 calc(var(--notch) + 0.5px)) right / 51% 100% no-repeat;
+          mask: radial-gradient(circle at 0 var(--cut), transparent var(--notch), #000 calc(var(--notch) + 0.5px)) left / 51% 100% no-repeat,
+            radial-gradient(circle at 100% var(--cut), transparent var(--notch), #000 calc(var(--notch) + 0.5px)) right / 51% 100% no-repeat;
+        }
+        .stub {
+          width: auto;
+          height: var(--stub-h);
+          box-sizing: border-box;
+          background-size: 9px 4px;
+          background-repeat: repeat-x;
+          background-position: 0 -1px;
+        }
+        .band {
+          padding: 0 18px;
+        }
+        .band p small {
+          display: none;
+        }
+        .main-body {
+          padding: 16px 18px 14px;
+        }
+        .details {
+          grid-template-columns: repeat(3, auto);
+        }
+        .details .wide {
+          display: none;
+        }
+        .stub .band,
+        .mini {
+          display: none;
+        }
+        .stub-body {
+          padding-top: 18px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .peel,
+        .peel-shadow,
+        .ticket-wrap {
+          animation: none;
+        }
+        .peel-hop {
+          animation: peel-bob 1.6s ease-in-out infinite;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <div id="boot" class="preflight">
+      <div class="ticket-wrap">
+        <div class="ticket-tilt" id="boot-ticket">
+          <section class="ticket" aria-labelledby="pass-name">
+            <div class="main">
+              <header class="band">
+                <h1 id="pass-name">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" transform="rotate(90 12 12)" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" /></svg>
+                  Jacob Kuchinsky
+                </h1>
+                <p><small>Portfolio flight</small></p>
+              </header>
+              <div class="main-body">
+                <div class="route">
+                  <div class="from">
+                    <span class="label">From</span>
+                    <span class="code">HEY</span>
+                    <span class="city">Hello</span>
+                  </div>
+                  <div class="arc" aria-hidden="true">
+                    <svg viewBox="0 0 200 54" preserveAspectRatio="none">
+                      <path d="M4 50 Q100 -4 196 50" fill="none" stroke="#2a2416" stroke-opacity="0.7" stroke-width="1.6" stroke-dasharray="5 6" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+                    </svg>
+                    <svg class="plane" viewBox="0 0 24 24"><path fill="currentColor" transform="rotate(90 12 12)" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" /></svg>
+                  </div>
+                  <div class="to">
+                    <span class="label">To</span>
+                    <span class="code">WRK</span>
+                    <span class="city">My work</span>
+                  </div>
+                </div>
+                <dl class="details">
+                  <div>
+                    <dt class="label">Passenger</dt>
+                    <dd>You</dd>
+                  </div>
+                  <div>
+                    <dt class="label">Flight</dt>
+                    <dd>JK 001</dd>
+                  </div>
+                  <div>
+                    <dt class="label">Seat</dt>
+                    <dd>1A</dd>
+                  </div>
+                  <div>
+                    <dt class="label">Gate</dt>
+                    <dd>01</dd>
+                  </div>
+                  <div class="wide">
+                    <dt class="label">Class</dt>
+                    <dd>First</dd>
+                  </div>
+                </dl>
+                <p class="note">Boarding now · Sound on for the full flight</p>
+              </div>
+            </div>
+
+            <div class="stub">
+              <header class="band"><p>Boarding pass</p></header>
+              <div class="stub-body">
+                <dl class="mini">
+                  <div>
+                    <dt class="label">From</dt>
+                    <dd>HEY</dd>
+                  </div>
+                  <div class="right">
+                    <dt class="label">To</dt>
+                    <dd>WRK</dd>
+                  </div>
+                </dl>
+                <div class="action">
+                  <div class="loader" id="boot-loader" aria-hidden="true">
+                    <div class="peel-hop">
+                      <img class="peel" src="/banana-peel.webp" alt="" width="72" height="62" decoding="async" />
+                    </div>
+                    <div class="peel-shadow"></div>
+                  </div>
+                  <div class="progress" id="boot-progress" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                    <i id="boot-bar"></i>
+                  </div>
+                  <p class="status" id="boot-status" aria-live="polite">Loading</p>
+                  <button class="begin" id="boot-begin" type="button" hidden>Begin pre-flight</button>
+                  <p class="sound-hint" id="boot-hint" hidden>Best with sound on</p>
+                </div>
+                <!-- Scannable with any phone camera. -->
+                <svg class="qr" viewBox="0 0 62 62" shape-rendering="crispEdges" role="img" aria-label="QR code"><path d="M2 60L16 60L16 46L2 46ZM22 60L24 60L24 58L22 58ZM26 60L34 60L34 58L36 58L36 60L40 60L40 58L38 58L38 56L40 56L40 54L44 54L44 52L54 52L54 50L52 50L52 48L54 48L54 46L52 46L52 44L54 44L54 40L52 40L52 42L48 42L48 38L58 38L58 40L56 40L56 42L60 42L60 34L56 34L56 36L46 36L46 42L42 42L42 44L38 44L38 40L34 40L34 42L36 42L36 44L32 44L32 46L30 46L30 48L28 48L28 50L26 50L26 52L28 52L28 54L26 54L26 52L24 52L24 50L26 50L26 48L22 48L22 54L24 54L24 58L26 58ZM42 60L44 60L44 56L42 56ZM50 60L54 60L54 56L52 56L52 58L50 58ZM56 60L58 60L58 58L60 58L60 52L58 52L58 54L56 54ZM4 58L4 48L14 48L14 58ZM18 58L20 58L20 56L18 56ZM30 58L30 54L32 54L32 58ZM46 58L50 58L50 56L46 56ZM6 56L12 56L12 50L6 50ZM20 56L22 56L22 54L20 54ZM34 56L34 54L36 54L36 56ZM44 56L46 56L46 54L44 54ZM36 54L36 52L38 52L38 54ZM54 54L56 54L56 52L54 52ZM18 52L20 52L20 50L18 50ZM32 52L32 50L34 50L34 52ZM38 52L38 46L40 46L40 52ZM56 52L58 52L58 48L56 48ZM44 50L44 44L50 44L50 50ZM20 48L22 48L22 46L20 46ZM46 48L48 48L48 46L46 46ZM58 48L60 48L60 44L58 44ZM18 46L20 46L20 44L18 44ZM24 46L30 46L30 42L28 42L28 44L26 44L26 42L24 42ZM54 46L56 46L56 44L54 44ZM2 44L8 44L8 42L10 42L10 40L6 40L6 42L2 42ZM10 44L12 44L12 42L10 42ZM14 44L16 44L16 42L14 42ZM12 42L14 42L14 40L16 40L16 38L14 38L14 36L12 36L12 38L10 38L10 40L12 40ZM16 42L22 42L22 34L26 34L26 38L28 38L28 34L32 34L32 30L34 30L34 32L36 32L36 36L38 36L38 32L40 32L40 30L36 30L36 28L38 28L38 26L42 26L42 32L44 32L44 28L46 28L46 24L48 24L48 22L50 22L50 24L52 24L52 22L54 22L54 24L56 24L56 18L54 18L54 20L52 20L52 18L48 18L48 20L46 20L46 22L44 22L44 24L40 24L40 22L36 22L36 20L34 20L34 24L32 24L32 26L34 26L34 28L32 28L32 26L30 26L30 22L28 22L28 20L26 20L26 24L24 24L24 20L22 20L22 18L18 18L18 22L14 22L14 20L12 20L12 22L10 22L10 20L8 20L8 24L10 24L10 28L12 28L12 26L14 26L14 24L22 24L22 32L18 32L18 36L16 36L16 38L20 38L20 40L16 40ZM30 42L32 42L32 40L34 40L34 38L32 38L32 36L30 36ZM42 40L44 40L44 38L42 38ZM2 38L4 38L4 36L2 36ZM8 38L10 38L10 36L12 36L12 34L10 34L10 30L8 30L8 28L4 28L4 26L2 26L2 32L6 32L6 36L8 36ZM38 38L40 38L40 36L38 36ZM14 36L16 36L16 34L14 34ZM32 36L34 36L34 34L32 34ZM40 36L46 36L46 34L40 34ZM12 34L14 34L14 32L18 32L18 28L20 28L20 26L14 26L14 28L16 28L16 30L12 30ZM48 34L50 34L50 32L48 32ZM52 34L54 34L54 32L56 32L56 30L52 30ZM26 32L26 30L28 30L28 32ZM58 32L60 32L60 20L58 20L58 28L56 28L56 30L58 30ZM24 30L24 26L26 26L26 30ZM28 30L28 28L30 28L30 30ZM46 30L52 30L52 28L50 28L50 24L48 24L48 28L46 28ZM52 28L54 28L54 26L52 26ZM4 26L6 26L6 18L4 18L4 20L2 20L2 22L4 22ZM30 22L32 22L32 20L30 20ZM10 20L12 20L12 18L10 18ZM14 20L16 20L16 18L14 18ZM32 20L34 20L34 18L36 18L36 20L38 20L38 16L36 16L36 14L34 14L34 16L32 16L32 14L34 14L34 10L36 10L36 8L34 8L34 6L32 6L32 10L28 10L28 12L22 12L22 18L24 18L24 14L26 14L26 18L28 18L28 14L30 14L30 18L32 18ZM40 20L46 20L46 18L40 18ZM2 16L16 16L16 2L2 2ZM18 16L20 16L20 12L22 12L22 6L26 6L26 4L28 4L28 6L26 6L26 10L28 10L28 8L30 8L30 6L32 6L32 4L34 4L34 2L24 2L24 4L20 4L20 6L18 6L18 8L20 8L20 10L18 10ZM38 16L40 16L40 14L42 14L42 16L44 16L44 12L40 12L40 8L38 8ZM46 16L60 16L60 2L46 2ZM4 14L4 4L14 4L14 14ZM48 14L48 4L58 4L58 14ZM6 12L12 12L12 6L6 6ZM50 12L56 12L56 6L50 6ZM36 8L38 8L38 4L40 4L40 2L36 2ZM40 8L44 8L44 6L42 6L42 4L40 4ZM42 4L44 4L44 2L42 2Z" fill-rule="evenodd" /></svg>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Tilt the ticket toward the pointer, with a glare that follows it.
+      // Runs before the app bundle so it works while loading. Off for touch and reduced motion.
+      ;(() => {
+        const ticket = document.getElementById('boot-ticket')
+        if (matchMedia('(prefers-reduced-motion: reduce), (pointer: coarse)').matches) return
+        const boot = document.getElementById('boot')
+        boot.addEventListener('pointermove', (e) => {
+          const r = ticket.getBoundingClientRect()
+          const x = Math.max(-0.6, Math.min(0.6, (e.clientX - r.left) / r.width - 0.5))
+          const y = Math.max(-0.6, Math.min(0.6, (e.clientY - r.top) / r.height - 0.5))
+          ticket.style.setProperty('--rx', `${(-y * 7).toFixed(2)}deg`)
+          ticket.style.setProperty('--ry', `${(x * 9).toFixed(2)}deg`)
+          ticket.style.setProperty('--gx', `${((x + 0.5) * 100).toFixed(1)}%`)
+          ticket.style.setProperty('--gy', `${((y + 0.5) * 100).toFixed(1)}%`)
+        })
+        boot.addEventListener('pointerleave', () => {
+          ticket.style.setProperty('--rx', '0deg')
+          ticket.style.setProperty('--ry', '0deg')
+        })
+      })()
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

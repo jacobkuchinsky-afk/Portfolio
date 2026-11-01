@@ -1,0 +1,14 @@
+node_modules
+dist
+.DS_Store
+
+# Blender's automatic backup copies
+*.blend1
+
+# Upstream clone of Octal450/MD-11 (a separate git repo; see CREDITS.md)
+assets-src/md11-source/
+
+# Local env and deploy-host state
+.env*
+.vercel
+.netlify
