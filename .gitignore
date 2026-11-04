@@ -12,3 +12,6 @@ assets-src/md11-source/
 .env*
 .vercel
 .netlify
+
+# Claude prompts for Blender work (kept local)
+prompts/
